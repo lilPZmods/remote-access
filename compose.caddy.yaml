@@ -1,0 +1,24 @@
+# Bundled Caddy: serves https://<PUBLIC_HOST>/remote/ and gets its own
+# Let's Encrypt certificate. Ports 80 and 443 must reach this machine.
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: remote-access-caddy
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - gate
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

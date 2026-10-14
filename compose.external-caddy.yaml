@@ -1,0 +1,13 @@
+# Join a Caddy you already run. Route /remote to the gate in your Caddyfile
+# (see "Caddy" in the README for the block to copy).
+
+services:
+  gate:
+    networks:
+      - default
+      - caddy
+
+networks:
+  caddy:
+    name: ${CADDY_NETWORK}
+    external: true

@@ -11,7 +11,7 @@ Only accounts listed in `allowed-emails.txt` get past the gate. Guacamole trusts
 ## Requirements
 
 - Docker (Docker Desktop on the Mac you want to reach)
-- A Caddy container already serving your domain over HTTPS, on a Docker network this stack can join
+- A hostname that points at this machine, such as a No-IP hostname kept current by the No-IP DUC app
 - A Google Cloud project for the OAuth client
 
 ## Setup
@@ -26,13 +26,15 @@ Only accounts listed in `allowed-emails.txt` get past the gate. Guacamole trusts
    cp allowed-emails.example.txt allowed-emails.txt  # one Google account per line
    ```
 
-3. **Caddy.** Route `/remote` to the gate:
-   ```
-   redir /remote /remote/
-   handle /remote/* {
-       reverse_proxy remote-access-gate:4180
-   }
-   ```
+3. **Caddy.** Choose a mode with `COMPOSE_FILE` in `.env`:
+   - **Bundled (the default).** The stack runs its own Caddy, which gets a Let's Encrypt certificate for `PUBLIC_HOST` automatically. You have nothing to configure here, but your router must forward ports **80 and 443** to this machine. Only one machine behind a router can receive them; to reach other computers on the same network, add them as connections instead (see below).
+   - **Existing Caddy.** Set `COMPOSE_FILE=compose.yaml:compose.external-caddy.yaml` and `CADDY_NETWORK` to your Caddy's Docker network, then add this to your site block:
+     ```
+     redir /remote /remote/
+     handle /remote/* {
+         reverse_proxy remote-access-gate:4180
+     }
+     ```
 
 4. **Start it.**
    ```sh
@@ -45,7 +47,7 @@ Only accounts listed in `allowed-emails.txt` get past the gate. Guacamole trusts
 
 ## Adding more computers
 
-In Guacamole, open your name → Settings → Connections → New Connection. Use VNC (port 5900) for Macs and RDP (port 3389) for Windows Pro. guacd must be able to reach the machine. For computers on other networks, a private network such as Tailscale on both ends works well.
+In Guacamole, open your name → Settings → Connections → New Connection. Use VNC (port 5900) for Macs and RDP (port 3389) for Windows Pro. guacd must be able to reach the machine. A computer at another location can run its own copy of this stack under its own hostname. All your copies can share one Google OAuth client: add each copy's `https://<hostname>/remote/oauth2/callback` as another authorized redirect URI, and reuse the same client ID and secret.
 
 ## Notes
 

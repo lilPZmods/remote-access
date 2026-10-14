@@ -1,0 +1,7 @@
+{$PUBLIC_HOST} {
+	redir / /remote/
+	redir /remote /remote/
+	handle /remote/* {
+		reverse_proxy gate:4180
+	}
+}
