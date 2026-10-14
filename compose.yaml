@@ -1,0 +1,82 @@
+# Browser remote desktop for a Mac, gated by Google sign-in.
+#
+#   browser -> Caddy -> gate (oauth2-proxy) -> guacamole -> guacd -> Mac Screen Sharing
+#
+# Only the gate is reachable from Caddy; nothing here publishes a host port.
+# Settings come from .env (copy .env.example).
+
+services:
+  gate:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    container_name: remote-access-gate
+    environment:
+      OAUTH2_PROXY_PROVIDER: google
+      OAUTH2_PROXY_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${COOKIE_SECRET}
+      # The only accounts let through, one per line
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/allowed-emails.txt
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_UPSTREAMS: http://guacamole:8080/
+      OAUTH2_PROXY_PROXY_PREFIX: /remote/oauth2
+      OAUTH2_PROXY_REDIRECT_URL: https://${PUBLIC_HOST}/remote/oauth2/callback
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_PATH: /remote
+      OAUTH2_PROXY_COOKIE_NAME: _remote_access
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+    volumes:
+      - ./allowed-emails.txt:/etc/oauth2-proxy/allowed-emails.txt:ro
+    networks:
+      - default
+      - caddy
+    depends_on:
+      - guacamole
+    restart: unless-stopped
+
+  guacamole:
+    image: guacamole/guacamole:1.6.0
+    container_name: remote-access-guacamole
+    environment:
+      WEBAPP_CONTEXT: remote
+      GUACD_HOSTNAME: guacd
+      POSTGRESQL_ENABLED: "true"
+      POSTGRESQL_HOSTNAME: db
+      POSTGRESQL_DATABASE: guacamole
+      POSTGRESQL_USERNAME: guacamole
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+      # Trust the signed-in email the gate passes along; the gate overwrites
+      # any copy of this header sent by the browser.
+      HEADER_ENABLED: "true"
+      HTTP_AUTH_HEADER: X-Forwarded-Email
+    depends_on:
+      - db
+      - guacd
+    restart: unless-stopped
+
+  guacd:
+    image: guacamole/guacd:1.6.0
+    container_name: remote-access-guacd
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: remote-access-db
+    environment:
+      POSTGRES_DB: guacamole
+      POSTGRES_USER: guacamole
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # The Google account that becomes the Guacamole admin on first start
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+
+volumes:
+  db:
+
+networks:
+  caddy:
+    name: ${CADDY_NETWORK}
+    external: true
